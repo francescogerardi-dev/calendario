@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione KIT - Calendario 2026</title>
+    <title>Gestione KIT - Calendario Logistico 2026 (Fix Eliminazione)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -19,7 +19,6 @@
         }
 
         body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background-color: var(--bg-color); }
-        
         #toolbar-container { margin-bottom: 10px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
         .controls-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 1px solid #eee; }
         #toolbar { padding: 15px; display: none; gap: 10px; justify-content: center; flex-wrap: wrap; }
@@ -27,20 +26,20 @@
         #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
         #calendar-zoom-wrapper { transform-origin: top center; transition: transform 0.2s ease; }
 
-        /* LAYOUT ELASTICO */
         .fc .fc-daygrid-body, .fc .fc-daygrid-day-frame { height: auto !important; min-height: 100px; }
         .fc .fc-scroller { height: auto !important; overflow: visible !important; }
         .fc-daygrid-day-events { position: relative !important; display: flex !important; flex-direction: column !important; gap: 2px !important; padding: 2px !important; }
         .fc-daygrid-event-harness { position: static !important; visibility: visible !important; margin-bottom: 2px !important; }
 
-        .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; font-size: 0.8em !important; white-space: normal !important; display: block !important; border-radius: 4px !important; }
+        .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; font-size: 0.8em !important; white-space: normal !important; display: block !important; border-radius: 4px !important; cursor: pointer; }
         .fc-event-kit { background-color: var(--kit-color) !important; color: white; }
         .fc-event-custom { background-color: var(--custom-color) !important; color: white; }
-        .fc-event-holiday { background-color: var(--holiday-color) !important; color: #333 !important; border: 1px solid #bbb !important; font-weight: bold; }
+        .fc-event-holiday { background-color: var(--holiday-color) !important; color: #333 !important; border: 1px solid #bbb !important; font-weight: bold; cursor: default; }
         .event-has-notes { border: 2px solid var(--note-highlight) !important; box-shadow: 0 0 4px rgba(255, 204, 0, 0.5); }
 
         .fc-day-sat, .fc-day-sun { background-color: #f1f1f1 !important; }
-        
+        .fc-toolbar-title { text-transform: capitalize; }
+
         button { padding: 8px 16px; cursor: pointer; border-radius: 6px; border: 1px solid #ddd; background: white; font-weight: 600; }
         .btn-zoom { background: #eee; font-size: 1.2em; padding: 5px 15px; }
         .btn-save { background: var(--primary-color); color: white; border: none; }
@@ -48,7 +47,6 @@
         .btn-img { background: #6f42c1; color: white; border: none; }
         .btn-danger { color: #d9534f; border-color: #d9534f; }
 
-        /* STILE TABELLA EXPORT (Nascosta) */
         #export-table-container { position: absolute; left: -9999px; top: 0; background: white; padding: 20px; width: 800px; }
         .export-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         .export-table th, .export-table td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 12pt; }
@@ -83,7 +81,7 @@
     </div>
 
     <div id="export-table-container">
-        <h2 style="text-align: center;">Riepilogo KIT e Release</h2>
+        <h2 style="text-align: center;">Riepilogo Eventi Logistici</h2>
         <table class="export-table">
             <thead>
                 <tr>
@@ -131,7 +129,6 @@
             outer.style.height = (wrapper.offsetHeight * currentZoom) + "px";
         }
 
-        // --- EXPORT HTML FISSO ---
         function exportToStaticHTML() {
             const events = calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).map(e => ({
                 title: e.title, start: e.startStr, end: e.endStr, allDay: e.allDay,
@@ -145,10 +142,9 @@
             const blob = new Blob([dataInjected], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = 'situazione_calendario_2026.html'; a.click();
+            a.href = url; a.download = 'situazione_2026.html'; a.click();
         }
 
-        // --- EXPORT PNG TABELLA ---
         function exportTableAsImage() {
             const tbody = document.getElementById('export-table-body');
             tbody.innerHTML = "";
@@ -168,7 +164,7 @@
 
             html2canvas(document.getElementById('export-table-container')).then(canvas => {
                 const link = document.createElement('a');
-                link.download = 'tabella_eventi.png';
+                link.download = 'riepilogo_kit_2026.png';
                 link.href = canvas.toDataURL("image/png");
                 link.click();
             });
@@ -185,8 +181,8 @@
                 locale: 'it',
                 firstDay: 1, 
                 height: 'auto',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: 'multiMonthYear,dayGridMonth' },
                 buttonText: { today: 'Oggi', month: 'Mese', year: 'Anno' },
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'multiMonthYear,dayGridMonth' },
                 events: initialEvents,
                 selectable: true,
                 editable: true,
@@ -205,9 +201,34 @@
                     }
                     calendar.unselect();
                 },
+                eventClick: function(info) {
+                    if (info.event.classNames.includes('fc-event-holiday')) return;
+
+                    const scelta = confirm(
+                        "EVENTO: " + info.event.title + "\n" +
+                        "NOTE: " + (info.event.extendedProps.note || "nessuna") + "\n\n" +
+                        "VUOI ELIMINARE QUESTO EVENTO?\n" +
+                        "(OK per eliminare, ANNULLA per modificare le note)"
+                    );
+
+                    if (scelta) {
+                        if (confirm("Confermi l'eliminazione definitiva?")) {
+                            info.event.remove();
+                            saveToLocal();
+                        }
+                    } else {
+                        const nuovaNota = prompt("Modifica la nota per questo evento:", info.event.extendedProps.note || "");
+                        if (nuovaNota !== null) {
+                            info.event.setExtendedProp('note', nuovaNota);
+                            saveToLocal();
+                            calendar.render();
+                        }
+                    }
+                },
                 eventAdd: saveToLocal, eventChange: saveToLocal, eventRemove: saveToLocal
             });
             calendar.render();
+            setTimeout(() => changeZoom(0), 100);
         });
 
         function saveToLocal() {
