@@ -3,32 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione KIT - Cloud & CSV Import</title>
+    <title>Gestione KIT - Cloud & CSV 2026</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
-        :root { --primary-color: #007bff; --kit-color: #2c3e50; --custom-color: #8e44ad; --holiday-color: #dfdfdf; --bg-color: #f8f9fa; --note-highlight: #ffcc00; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background-color: var(--bg-color); }
+        :root { --primary: #007bff; --kit: #2c3e50; --custom: #8e44ad; --holiday: #dfdfdf; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background-color: var(--bg); }
         #toolbar-container { margin-bottom: 10px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
         .controls-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 1px solid #eee; }
         #toolbar { padding: 15px; display: none; gap: 10px; justify-content: center; flex-wrap: wrap; }
-        #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; font-size: 0.8em !important; border-radius: 4px !important; cursor: pointer; }
-        .fc-event-kit { background-color: var(--kit-color) !important; color: white; }
-        .fc-event-custom { background-color: var(--custom-color) !important; color: white; }
-        .fc-event-holiday { background-color: var(--holiday-color) !important; color: #333 !important; border: 1px solid #bbb !important; font-weight: bold; cursor: default; }
-        .event-has-notes { border: 2px solid var(--note-highlight) !important; }
+        #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); min-height: 600px; }
+        
+        .fc-event-kit { background-color: var(--kit) !important; color: white !important; }
+        .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
+        .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; }
+        
         .sync-indicator { font-size: 0.85em; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
         .sync-ok { background: #d4edda; color: #155724; }
         .sync-wait { background: #fff3cd; color: #856404; }
+        
         button { padding: 8px 16px; cursor: pointer; border-radius: 6px; border: 1px solid #ddd; background: white; font-weight: 600; }
-        .btn-csv { background: #008cba; color: white; border: none; }
-        .btn-danger { color: #d9534f; border-color: #d9534f; }
-        #export-table-container { position: absolute; left: -9999px; top: 0; background: white; padding: 20px; width: 800px; }
+        .btn-main { background: var(--primary); color: white; border: none; }
     </style>
 </head>
 <body>
@@ -36,43 +36,34 @@
     <div id="toolbar-container">
         <div class="controls-row">
             <button onclick="toggleToolbar()">⚙️ Gestione <span id="arrow">▼</span></button>
-            <div id="sync-status" class="sync-indicator sync-ok">Sincronizzato ✔️</div>
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div id="sync-status" class="sync-indicator sync-wait">Connessione...</div>
+            <div>
                 <button onclick="changeZoom(-0.1)">-</button>
                 <span id="zoom-val">100%</span>
                 <button onclick="changeZoom(0.1)">+</button>
             </div>
         </div>
         <div id="toolbar">
-            <button class="btn-csv" onclick="document.getElementById('csvInput').click()">📊 Importa CSV</button>
+            <button class="btn-main" onclick="document.getElementById('csvInput').click()">📊 Importa CSV</button>
             <input type="file" id="csvInput" style="display:none" accept=".csv" onchange="importCSV(event)">
-            <button onclick="exportTableAsImage()">📸 Esporta Tabella PNG</button>
-            <button class="btn-danger" onclick="clearFirebase()">🗑️ Svuota Tutto Cloud</button>
+            <button onclick="exportTableAsImage()">📸 Esporta PNG</button>
+            <button onclick="clearFirebase()" style="color:red">🗑️ Svuota Cloud</button>
         </div>
     </div>
 
     <div id="calendar-outer-wrapper">
-        <div id="calendar-zoom-wrapper">
-            <div id="calendar"></div>
-        </div>
-    </div>
-
-    <div id="export-table-container">
-        <table border="1" style="width:100%; border-collapse: collapse;">
-            <thead><tr><th>Data</th><th>Evento e Note</th></tr></thead>
-            <tbody id="export-table-body"></tbody>
-        </table>
+        <div id="calendar"></div>
     </div>
 
     <script>
-        // --- CONFIGURAZIONE FIREBASE (Incolla i tuoi dati qui) ---
+        // --- 1. CONFIGURAZIONE (METTI I TUOI DATI) ---
         const firebaseConfig = {
-            apiKey: "INCOLLA_QUI",
-            authDomain: "INCOLLA_QUI",
-            databaseURL: "INCOLLA_QUI",
-            projectId: "INCOLLA_QUI",
-            storageBucket: "INCOLLA_QUI",
-            appId: "INCOLLA_QUI"
+            apiKey: "IL_TUO_DATO",
+            authDomain: "IL_TUO_DATO",
+            databaseURL: "IL_TUO_DATO",
+            projectId: "IL_TUO_DATO",
+            storageBucket: "IL_TUO_DATO",
+            appId: "IL_TUO_DATO"
         };
 
         firebase.initializeApp(firebaseConfig);
@@ -80,32 +71,50 @@
         const eventsRef = db.ref('pico_events_2026');
 
         let calendar;
+        let currentZoom = 1.0;
+
         const holidays2026 = [
-            { title: "Capodanno", start: "2026-01-01", className: "fc-event-holiday", editable: false },
-            { title: "Pasqua", start: "2026-04-05", className: "fc-event-holiday", editable: false },
-            { title: "Pasquetta", start: "2026-04-06", className: "fc-event-holiday", editable: false },
-            { title: "Natale", start: "2026-12-25", className: "fc-event-holiday", editable: false }
+            { title: "Capodanno", start: "2026-01-01", className: "fc-event-holiday" },
+            { title: "Epifania", start: "2026-01-06", className: "fc-event-holiday" },
+            { title: "Pasqua", start: "2026-04-05", className: "fc-event-holiday" },
+            { title: "Pasquetta", start: "2026-04-06", className: "fc-event-holiday" },
+            { title: "Liberazione", start: "2026-04-25", className: "fc-event-holiday" },
+            { title: "Ferragosto", start: "2026-08-15", className: "fc-event-holiday" },
+            { title: "Natale", start: "2026-12-25", className: "fc-event-holiday" }
         ];
 
+        // --- 2. INIZIALIZZAZIONE ---
         document.addEventListener('DOMContentLoaded', function() {
-            calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'it',
+                firstDay: 1,
+                height: 'auto',
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'multiMonthYear,dayGridMonth' },
-                events: [],
+                events: holidays2026,
                 selectable: true,
                 editable: true,
-                eventAdd: syncToFirebase, eventChange: syncToFirebase, eventRemove: syncToFirebase,
+                eventAdd: syncToFirebase,
+                eventChange: syncToFirebase,
+                eventRemove: syncToFirebase,
                 select: function(info) {
                     let nome = prompt("Nome evento:");
                     if (nome) {
-                        calendar.addEvent({ title: nome, start: info.startStr, allDay: true, extendedProps: { note: prompt("Note:") || "" } });
+                        calendar.addEvent({
+                            title: nome,
+                            start: info.startStr,
+                            allDay: true,
+                            className: nome.toUpperCase() === "KIT" ? "fc-event-kit" : "fc-event-custom",
+                            extendedProps: { note: prompt("Note:") || "" }
+                        });
                     }
                     calendar.unselect();
                 }
             });
             calendar.render();
 
+            // Ascolta cambiamenti dal cloud
             eventsRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 calendar.removeAllEvents();
@@ -115,60 +124,72 @@
             });
         });
 
-        // --- FUNZIONE IMPORT CSV ---
+        // --- 3. FUNZIONI CORE ---
+        function syncToFirebase() {
+            setStatus("Salvataggio... ⏳", "sync-wait");
+            const toSave = calendar.getEvents()
+                .filter(e => !e.classNames.includes('fc-event-holiday'))
+                .map(e => ({
+                    title: e.title,
+                    start: e.startStr,
+                    allDay: e.allDay,
+                    extendedProps: e.extendedProps || {},
+                    className: e.classNames.join(' ')
+                }));
+            eventsRef.set(toSave);
+        }
+
         function importCSV(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
-                const text = e.target.result;
-                const lines = text.split(/\r?\n/);
+                const lines = e.target.result.split(/\r?\n/);
                 const newEvents = [];
-
-                // Saltiamo la prima riga (header)
                 for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    
-                    // Riconosce virgola o punto e virgola
-                    const delimiter = lines[i].includes(';') ? ';' : ',';
-                    const cols = lines[i].split(delimiter);
-
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    const cols = line.split(/[;,]/);
                     if (cols.length >= 2) {
                         newEvents.push({
                             title: cols[1].trim(),
-                            start: cols[0].trim(), // Formato AAAA-MM-GG
+                            start: cols[0].trim(),
                             allDay: true,
                             extendedProps: { note: cols[2] ? cols[2].trim() : "" },
                             className: cols[1].trim().toUpperCase() === "KIT" ? "fc-event-kit" : "fc-event-custom"
                         });
                     }
                 }
-
-                if (confirm(`Trovati ${newEvents.length} eventi. Caricarli sul Cloud?`)) {
-                    // Recuperiamo gli eventi esistenti per non sovrascrivere ma aggiungere
-                    eventsRef.once('value', (snapshot) => {
-                        const currentCloud = snapshot.val() ? Object.values(snapshot.val()) : [];
-                        const merged = currentCloud.concat(newEvents);
-                        eventsRef.set(merged);
-                        alert("Importazione completata!");
+                if (newEvents.length > 0 && confirm(`Importare ${newEvents.length} eventi?`)) {
+                    eventsRef.once('value', (snap) => {
+                        const current = snap.val() ? Object.values(snap.val()) : [];
+                        eventsRef.set(current.concat(newEvents));
                     });
                 }
             };
             reader.readAsText(file);
         }
 
-        function syncToFirebase() {
-            setStatus("Salvataggio... ⏳", "sync-wait");
-            const toSave = calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).map(e => ({
-                title: e.title, start: e.startStr, allDay: e.allDay, extendedProps: e.extendedProps || {}, className: e.classNames.join(' ')
-            }));
-            eventsRef.set(toSave);
+        function setStatus(txt, cls) {
+            const s = document.getElementById('sync-status');
+            s.innerText = txt; s.className = "sync-indicator " + cls;
         }
 
-        function setStatus(text, cls) { const el = document.getElementById('sync-status'); el.innerText = text; el.className = "sync-indicator " + cls; }
-        function toggleToolbar() { const tb = document.getElementById('toolbar'); tb.style.display = (tb.style.display === "flex") ? "none" : "flex"; }
-        function clearFirebase() { if(confirm("Svuotare Cloud?")) eventsRef.set([]); }
+        function toggleToolbar() {
+            const t = document.getElementById('toolbar');
+            t.style.display = (t.style.display === "flex") ? "none" : "flex";
+        }
+
+        function changeZoom(v) {
+            currentZoom = Math.min(Math.max(0.5, currentZoom + v), 1.0);
+            document.getElementById('calendar').style.transform = `scale(${currentZoom})`;
+            document.getElementById('calendar').style.transformOrigin = "top center";
+            document.getElementById('zoom-val').innerText = Math.round(currentZoom * 100) + "%";
+        }
+
+        function clearFirebase() {
+            if(confirm("Cancellare tutto dal cloud?")) eventsRef.set([]);
+        }
     </script>
 </body>
 </html>
