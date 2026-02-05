@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione KIT - Cloud & CSV 2026</title>
+    <title>Gestione KIT - Cloud & JSON Import</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
-        :root { --primary: #007bff; --kit: #2c3e50; --custom: #8e44ad; --holiday: #dfdfdf; --bg: #f8f9fa; }
+        :root { --primary: #007bff; --kit: #2c3e50; --holiday: #dfdfdf; --bg: #f8f9fa; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background-color: var(--bg); }
         #toolbar-container { margin-bottom: 10px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
         .controls-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 1px solid #eee; }
@@ -20,7 +20,6 @@
         #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); min-height: 600px; }
         
         .fc-event-kit { background-color: var(--kit) !important; color: white !important; }
-        .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
         .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; }
         
         .sync-indicator { font-size: 0.85em; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
@@ -28,7 +27,7 @@
         .sync-wait { background: #fff3cd; color: #856404; }
         
         button { padding: 8px 16px; cursor: pointer; border-radius: 6px; border: 1px solid #ddd; background: white; font-weight: 600; }
-        .btn-main { background: var(--primary); color: white; border: none; }
+        .btn-import { background: #28a745; color: white; border: none; }
     </style>
 </head>
 <body>
@@ -37,15 +36,16 @@
         <div class="controls-row">
             <button onclick="toggleToolbar()">⚙️ Gestione <span id="arrow">▼</span></button>
             <div id="sync-status" class="sync-indicator sync-wait">Connessione...</div>
-            <div>
+            <div style="display: flex; align-items: center; gap: 10px;">
                 <button onclick="changeZoom(-0.1)">-</button>
                 <span id="zoom-val">100%</span>
                 <button onclick="changeZoom(0.1)">+</button>
             </div>
         </div>
         <div id="toolbar">
-            <button class="btn-main" onclick="document.getElementById('csvInput').click()">📊 Importa CSV</button>
-            <input type="file" id="csvInput" style="display:none" accept=".csv" onchange="importCSV(event)">
+            <button class="btn-import" onclick="document.getElementById('jsonInput').click()">📂 Carica Progetto JSON</button>
+            <input type="file" id="jsonInput" style="display:none" accept=".json" onchange="importJSON(event)">
+            
             <button onclick="exportTableAsImage()">📸 Esporta PNG</button>
             <button onclick="clearFirebase()" style="color:red">🗑️ Svuota Cloud</button>
         </div>
@@ -56,9 +56,9 @@
     </div>
 
     <script>
-        // --- 1. CONFIGURAZIONE (METTI I TUOI DATI) ---
+        // --- CONFIGURAZIONE FIREBASE ---
         const firebaseConfig = {
-    apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
+           apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
   authDomain: "calendario-kit.firebaseapp.com",
   databaseURL: "https://calendario-kit-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "calendario-kit",
@@ -72,22 +72,15 @@
         const eventsRef = db.ref('pico_events_2026');
 
         let calendar;
-        let currentZoom = 1.0;
-
         const holidays2026 = [
             { title: "Capodanno", start: "2026-01-01", className: "fc-event-holiday" },
             { title: "Epifania", start: "2026-01-06", className: "fc-event-holiday" },
-            { title: "Pasqua", start: "2026-04-05", className: "fc-event-holiday" },
-            { title: "Pasquetta", start: "2026-04-06", className: "fc-event-holiday" },
             { title: "Liberazione", start: "2026-04-25", className: "fc-event-holiday" },
-            { title: "Ferragosto", start: "2026-08-15", className: "fc-event-holiday" },
             { title: "Natale", start: "2026-12-25", className: "fc-event-holiday" }
         ];
 
-        // --- 2. INIZIALIZZAZIONE ---
         document.addEventListener('DOMContentLoaded', function() {
-            const calendarEl = document.getElementById('calendar');
-            calendar = new FullCalendar.Calendar(calendarEl, {
+            calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
                 initialView: 'dayGridMonth',
                 locale: 'it',
                 firstDay: 1,
@@ -122,10 +115,48 @@
                 calendar.addEventSource(holidays2026);
                 if (data) calendar.addEventSource(Object.values(data));
                 setStatus("Sincronizzato ✔️", "sync-ok");
+            }, (error) => {
+                console.error("Errore Firebase:", error);
+                setStatus("Errore Permessi/Regole", "sync-wait");
             });
         });
 
-        // --- 3. FUNZIONI CORE ---
+        // --- FUNZIONE IMPORT JSON ---
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedEvents = JSON.parse(e.target.result);
+                    
+                    if (!Array.isArray(importedEvents)) {
+                        alert("Il file JSON non è in un formato valido (deve essere una lista di eventi).");
+                        return;
+                    }
+
+                    if (confirm(`Trovati ${importedEvents.length} eventi nel file. Vuoi aggiungerli al Cloud?`)) {
+                        setStatus("Caricamento... ⏳", "sync-wait");
+                        
+                        // Prendiamo i dati attuali dal cloud per fare un merge
+                        eventsRef.once('value', (snap) => {
+                            const currentEvents = snap.val() ? Object.values(snap.val()) : [];
+                            const combined = currentEvents.concat(importedEvents);
+                            
+                            // Aggiorniamo Firebase (questo attiverà automaticamente il refresh del calendario)
+                            eventsRef.set(combined).then(() => {
+                                alert("Dati importati e sincronizzati con successo!");
+                            });
+                        });
+                    }
+                } catch (err) {
+                    alert("Errore durante la lettura del file JSON: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
         function syncToFirebase() {
             setStatus("Salvataggio... ⏳", "sync-wait");
             const toSave = calendar.getEvents()
@@ -140,40 +171,9 @@
             eventsRef.set(toSave);
         }
 
-        function importCSV(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const lines = e.target.result.split(/\r?\n/);
-                const newEvents = [];
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-                    const cols = line.split(/[;,]/);
-                    if (cols.length >= 2) {
-                        newEvents.push({
-                            title: cols[1].trim(),
-                            start: cols[0].trim(),
-                            allDay: true,
-                            extendedProps: { note: cols[2] ? cols[2].trim() : "" },
-                            className: cols[1].trim().toUpperCase() === "KIT" ? "fc-event-kit" : "fc-event-custom"
-                        });
-                    }
-                }
-                if (newEvents.length > 0 && confirm(`Importare ${newEvents.length} eventi?`)) {
-                    eventsRef.once('value', (snap) => {
-                        const current = snap.val() ? Object.values(snap.val()) : [];
-                        eventsRef.set(current.concat(newEvents));
-                    });
-                }
-            };
-            reader.readAsText(file);
-        }
-
         function setStatus(txt, cls) {
             const s = document.getElementById('sync-status');
-            s.innerText = txt; s.className = "sync-indicator " + cls;
+            if(s) { s.innerText = txt; s.className = "sync-indicator " + cls; }
         }
 
         function toggleToolbar() {
@@ -194,4 +194,3 @@
     </script>
 </body>
 </html>
-
