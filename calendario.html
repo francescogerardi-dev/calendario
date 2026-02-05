@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione KIT - Cloud & JSON Import</title>
+    <title>Gestione KIT - Cloud Firebase 2026</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -12,22 +12,44 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
-        :root { --primary: #007bff; --kit: #2c3e50; --holiday: #dfdfdf; --bg: #f8f9fa; }
+        :root {
+            --primary: #007bff;
+            --kit: #2c3e50;
+            --custom: #8e44ad;
+            --holiday: #dfdfdf;
+            --bg: #f8f9fa;
+            --note-highlight: #ffcc00;
+        }
+
         body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background-color: var(--bg); }
+        
         #toolbar-container { margin-bottom: 10px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
         .controls-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 1px solid #eee; }
         #toolbar { padding: 15px; display: none; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
         #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); min-height: 600px; }
-        
+        #calendar-zoom-wrapper { transform-origin: top center; transition: transform 0.2s ease; }
+
+        /* Stili Eventi */
+        .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; font-size: 0.85em !important; border-radius: 4px !important; cursor: pointer; }
         .fc-event-kit { background-color: var(--kit) !important; color: white !important; }
-        .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; }
-        
+        .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
+        .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; border: 1px solid #bbb !important; }
+        .event-has-notes { border: 2px solid var(--note-highlight) !important; box-shadow: 0 0 4px rgba(255, 204, 0, 0.5); }
+
+        /* Indicatori e Bottoni */
         .sync-indicator { font-size: 0.85em; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
         .sync-ok { background: #d4edda; color: #155724; }
         .sync-wait { background: #fff3cd; color: #856404; }
         
-        button { padding: 8px 16px; cursor: pointer; border-radius: 6px; border: 1px solid #ddd; background: white; font-weight: 600; }
+        button { padding: 8px 16px; cursor: pointer; border-radius: 6px; border: 1px solid #ddd; background: white; font-weight: 600; transition: 0.2s; }
+        button:hover { background: #f0f0f0; }
         .btn-import { background: #28a745; color: white; border: none; }
+        .btn-img { background: #6f42c1; color: white; border: none; }
+        
+        #export-table-container { position: absolute; left: -9999px; top: 0; background: white; padding: 20px; width: 800px; }
+        .export-table { width: 100%; border-collapse: collapse; }
+        .export-table th, .export-table td { border: 1px solid #ccc; padding: 10px; text-align: left; }
     </style>
 </head>
 <body>
@@ -35,7 +57,7 @@
     <div id="toolbar-container">
         <div class="controls-row">
             <button onclick="toggleToolbar()">⚙️ Gestione <span id="arrow">▼</span></button>
-            <div id="sync-status" class="sync-indicator sync-wait">Connessione...</div>
+            <div id="sync-status" class="sync-indicator sync-wait">Connessione Cloud...</div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button onclick="changeZoom(-0.1)">-</button>
                 <span id="zoom-val">100%</span>
@@ -43,20 +65,30 @@
             </div>
         </div>
         <div id="toolbar">
-            <button class="btn-import" onclick="document.getElementById('jsonInput').click()">📂 Carica Progetto JSON</button>
+            <button class="btn-import" onclick="document.getElementById('jsonInput').click()">📂 Importa Progetto JSON</button>
             <input type="file" id="jsonInput" style="display:none" accept=".json" onchange="importJSON(event)">
-            
-            <button onclick="exportTableAsImage()">📸 Esporta PNG</button>
-            <button onclick="clearFirebase()" style="color:red">🗑️ Svuota Cloud</button>
+            <button class="btn-img" onclick="exportTableAsImage()">📸 Esporta Tabella PNG</button>
+            <button onclick="exportToStaticHTML()">📄 Export HTML Fissa</button>
+            <button onclick="clearFirebase()" style="color:red">🗑️ Svuota Tutto Cloud</button>
         </div>
     </div>
 
     <div id="calendar-outer-wrapper">
-        <div id="calendar"></div>
+        <div id="calendar-zoom-wrapper">
+            <div id="calendar"></div>
+        </div>
+    </div>
+
+    <div id="export-table-container">
+        <h2 style="text-align: center;">Riepilogo Logistica 2026</h2>
+        <table class="export-table">
+            <thead><tr><th>Data</th><th>Evento e Note</th></tr></thead>
+            <tbody id="export-table-body"></tbody>
+        </table>
     </div>
 
     <script>
-        // --- CONFIGURAZIONE FIREBASE ---
+        // --- CONFIGURAZIONE FIREBASE (Incolla i tuoi dati) ---
         const firebaseConfig = {
 apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
   authDomain: "calendario-kit.firebaseapp.com",
@@ -72,10 +104,16 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
         const eventsRef = db.ref('pico_events_2026');
 
         let calendar;
+        let currentZoom = 1.0;
+
         const holidays2026 = [
             { title: "Capodanno", start: "2026-01-01", className: "fc-event-holiday" },
             { title: "Epifania", start: "2026-01-06", className: "fc-event-holiday" },
+            { title: "Pasqua", start: "2026-04-05", className: "fc-event-holiday" },
+            { title: "Pasquetta", start: "2026-04-06", className: "fc-event-holiday" },
             { title: "Liberazione", start: "2026-04-25", className: "fc-event-holiday" },
+            { title: "Festa Lavoro", start: "2026-05-01", className: "fc-event-holiday" },
+            { title: "Ferragosto", start: "2026-08-15", className: "fc-event-holiday" },
             { title: "Natale", start: "2026-12-25", className: "fc-event-holiday" }
         ];
 
@@ -86,76 +124,65 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
                 firstDay: 1,
                 height: 'auto',
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'multiMonthYear,dayGridMonth' },
+                buttonText: { today: 'Oggi', month: 'Mese', year: 'Anno' },
                 events: holidays2026,
                 selectable: true,
                 editable: true,
-                eventAdd: syncToFirebase,
-                eventChange: syncToFirebase,
-                eventRemove: syncToFirebase,
+                eventDidMount: (info) => {
+                    if (info.event.extendedProps.note) info.el.classList.add('event-has-notes');
+                },
                 select: function(info) {
-                    let nome = prompt("Nome evento:");
-                    if (nome) {
+                    let nome = prompt("Nome evento (Vuoto per 'KIT'):");
+                    if (nome !== null) {
                         calendar.addEvent({
-                            title: nome,
+                            title: nome.trim() === "" ? "KIT" : nome,
                             start: info.startStr,
+                            end: info.endStr,
                             allDay: true,
-                            className: nome.toUpperCase() === "KIT" ? "fc-event-kit" : "fc-event-custom",
-                            extendedProps: { note: prompt("Note:") || "" }
+                            extendedProps: { note: prompt("Note:") || "" },
+                            className: nome.trim() === "" ? "fc-event-kit" : "fc-event-custom"
                         });
                     }
                     calendar.unselect();
-                }
+                },
+                eventClick: function(info) {
+                    if (info.event.classNames.includes('fc-event-holiday')) return;
+
+                    const scelta = confirm(
+                        "EVENTO: " + info.event.title + "\n" +
+                        "NOTE: " + (info.event.extendedProps.note || "nessuna") + "\n\n" +
+                        "ELIMINARE EVENTO? (OK per eliminare, ANNULLA per modificare note)"
+                    );
+
+                    if (scelta) {
+                        if (confirm("Confermi eliminazione definitiva?")) {
+                            info.event.remove();
+                        }
+                    } else {
+                        const n = prompt("Nuova nota:", info.event.extendedProps.note || "");
+                        if (n !== null) {
+                            info.event.setExtendedProp('note', n);
+                            syncToFirebase();
+                            calendar.render();
+                        }
+                    }
+                },
+                eventAdd: syncToFirebase,
+                eventChange: syncToFirebase,
+                eventRemove: syncToFirebase
             });
+
             calendar.render();
 
-            // Ascolta cambiamenti dal cloud
+            // Sincronizzazione con Firebase
             eventsRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 calendar.removeAllEvents();
                 calendar.addEventSource(holidays2026);
                 if (data) calendar.addEventSource(Object.values(data));
                 setStatus("Sincronizzato ✔️", "sync-ok");
-            }, (error) => {
-                console.error("Errore Firebase:", error);
-                setStatus("Errore Permessi/Regole", "sync-wait");
             });
         });
-
-        // --- FUNZIONE IMPORT JSON ---
-        function importJSON(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedEvents = JSON.parse(e.target.result);
-                    
-                    if (!Array.isArray(importedEvents)) {
-                        alert("Il file JSON non è in un formato valido (deve essere una lista di eventi).");
-                        return;
-                    }
-
-                    if (confirm(`Trovati ${importedEvents.length} eventi nel file. Vuoi aggiungerli al Cloud?`)) {
-                        setStatus("Caricamento... ⏳", "sync-wait");
-                        
-                        // Prendiamo i dati attuali dal cloud per fare un merge
-                        eventsRef.once('value', (snap) => {
-                            const currentEvents = snap.val() ? Object.values(snap.val()) : [];
-                            const combined = currentEvents.concat(importedEvents);
-                            
-                            // Aggiorniamo Firebase (questo attiverà automaticamente il refresh del calendario)
-                            eventsRef.set(combined).then(() => {
-                                alert("Dati importati e sincronizzati con successo!");
-                            });
-                        });
-                    }
-                } catch (err) {
-                    alert("Errore durante la lettura del file JSON: " + err.message);
-                }
-            };
-            reader.readAsText(file);
-        }
 
         function syncToFirebase() {
             setStatus("Salvataggio... ⏳", "sync-wait");
@@ -171,9 +198,27 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
             eventsRef.set(toSave);
         }
 
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (confirm(`Importare ${imported.length} eventi nel Cloud?`)) {
+                        eventsRef.once('value', (snap) => {
+                            const current = snap.val() ? Object.values(snap.val()) : [];
+                            eventsRef.set(current.concat(imported));
+                        });
+                    }
+                } catch (err) { alert("Errore file JSON."); }
+            };
+            reader.readAsText(file);
+        }
+
         function setStatus(txt, cls) {
             const s = document.getElementById('sync-status');
-            if(s) { s.innerText = txt; s.className = "sync-indicator " + cls; }
+            s.innerText = txt; s.className = "sync-indicator " + cls;
         }
 
         function toggleToolbar() {
@@ -182,15 +227,35 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
         }
 
         function changeZoom(v) {
-            currentZoom = Math.min(Math.max(0.5, currentZoom + v), 1.0);
-            document.getElementById('calendar').style.transform = `scale(${currentZoom})`;
-            document.getElementById('calendar').style.transformOrigin = "top center";
+            currentZoom = Math.min(Math.max(0.4, currentZoom + v), 1.0);
+            document.getElementById('calendar-zoom-wrapper').style.transform = `scale(${currentZoom})`;
             document.getElementById('zoom-val').innerText = Math.round(currentZoom * 100) + "%";
         }
 
-        function clearFirebase() {
-            if(confirm("Cancellare tutto dal cloud?")) eventsRef.set([]);
+        function exportTableAsImage() {
+            const tbody = document.getElementById('export-table-body');
+            tbody.innerHTML = "";
+            calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).sort((a,b) => new Date(a.start) - new Date(b.start)).forEach(ev => {
+                const tr = document.createElement('tr');
+                const d = new Date(ev.start).toLocaleDateString('it-IT');
+                tr.innerHTML = `<td>${d}</td><td><strong>${ev.title}</strong> - ${ev.extendedProps.note || ''}</td>`;
+                tbody.appendChild(tr);
+            });
+            html2canvas(document.getElementById('export-table-container')).then(canvas => {
+                const a = document.createElement('a'); a.download = 'riepilogo.png'; a.href = canvas.toDataURL(); a.click();
+            });
         }
+
+        function exportToStaticHTML() {
+            const events = calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).map(e => ({
+                title: e.title, start: e.startStr, allDay: e.allDay, extendedProps: e.extendedProps, className: e.classNames.join(' ')
+            }));
+            const html = document.documentElement.outerHTML.replace("events: holidays2026,", `events: ${JSON.stringify(events)},`);
+            const blob = new Blob([html], { type: 'text/html' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'situazione.html'; a.click();
+        }
+
+        function clearFirebase() { if(confirm("Svuotare Cloud?")) eventsRef.set([]); }
     </script>
 </body>
 </html>
