@@ -88,6 +88,9 @@
     </div>
 
     <script>
+
+        // 1. Aggiungi questi due import
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
         // --- CONFIGURAZIONE FIREBASE (Incolla i tuoi dati) ---
         const firebaseConfig = {
 apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
@@ -266,6 +269,7 @@ const appCheck = initializeAppCheck(app, {
     </script>
 </body>
 </html>
+
 
 
 
