@@ -100,12 +100,7 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
         };
 
         firebase.initializeApp(firebaseConfig);
-
-// 2. Inizializza App Check
-const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider('6LeOnW4sAAAAADtdy1-GTZPaYzPldNMAshqmm_0e'),
-  isTokenAutoRefreshEnabled: true // Aggiorna il token automaticamente
-});
+;
         
         const db = firebase.database();
         const eventsRef = db.ref('pico_events_2026');
@@ -266,4 +261,5 @@ const appCheck = initializeAppCheck(app, {
     </script>
 </body>
 </html>
+
 
