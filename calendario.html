@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione KIT - Cloud Firebase 2026</title>
+    <title>Gestione KIT & SWITCH - Cloud Firebase 2026</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -18,6 +17,7 @@
             --primary: #007bff;
             --kit: #2c3e50;
             --custom: #8e44ad;
+            --switch: #e67e22; /* Arancione per lo SWITCH */
             --holiday: #dfdfdf;
             --bg: #f8f9fa;
             --note-highlight: #ffcc00;
@@ -36,8 +36,14 @@
         .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; font-size: 0.85em !important; border-radius: 4px !important; cursor: pointer; }
         .fc-event-kit { background-color: var(--kit) !important; color: white !important; }
         .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
+        
+        /* NUOVO STILE SWITCH */
+        .fc-event-switch { background-color: var(--switch) !important; color: white !important; font-weight: bold !important; border: 2px solid #d35400 !important; }
+        
         .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; border: 1px solid #bbb !important; }
-        .event-has-notes { border: 2px solid var(--note-highlight) !important; box-shadow: 0 0 4px rgba(255, 204, 0, 0.5); }
+        
+        /* Note: il bordo giallo ora ha priorità */
+        .event-has-notes { border-color: var(--note-highlight) !important; box-shadow: 0 0 6px rgba(255, 204, 0, 0.7) !important; }
 
         /* Indicatori e Bottoni */
         .sync-indicator { font-size: 0.85em; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
@@ -90,26 +96,19 @@
     </div>
 
     <script>
-
-
-        // --- CONFIGURAZIONE FIREBASE (Incolla i tuoi dati) ---
+        // --- CONFIGURAZIONE FIREBASE ---
         const firebaseConfig = {
-apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
-  authDomain: "calendario-kit.firebaseapp.com",
-  databaseURL: "https://calendario-kit-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "calendario-kit",
-  storageBucket: "calendario-kit.firebasestorage.app",
-  messagingSenderId: "912995766124",
-  appId: "1:912995766124:web:2ee26f77adbe6da28bad49"
+            apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
+            authDomain: "calendario-kit.firebaseapp.com",
+            databaseURL: "https://calendario-kit-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "calendario-kit",
+            storageBucket: "calendario-kit.firebasestorage.app",
+            messagingSenderId: "912995766124",
+            appId: "1:912995766124:web:2ee26f77adbe6da28bad49"
         };
 
         firebase.initializeApp(firebaseConfig);
-
-// 2. AGGIUNGI QUESTO PER APP CHECK
-  const appCheck = firebase.appCheck().activate(
-    '6LeOnW4sAAAAADtdy1-GTZPaYzPldNMAshqmm_0e', 
-    true // Refresh automatico del token
-  );
+        const appCheck = firebase.appCheck().activate('6LeOnW4sAAAAADtdy1-GTZPaYzPldNMAshqmm_0e', true);
         
         const db = firebase.database();
         const eventsRef = db.ref('pico_events_2026');
@@ -139,45 +138,81 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
                 events: holidays2026,
                 selectable: true,
                 editable: true,
+                
                 eventDidMount: (info) => {
-                    if (info.event.extendedProps.note) info.el.classList.add('event-has-notes');
+                    // Gestione Note (Bordo Giallo)
+                    if (info.event.extendedProps.note && info.event.extendedProps.note.trim() !== "") {
+                        info.el.classList.add('event-has-notes');
+                        info.el.setAttribute('title', "Note: " + info.event.extendedProps.note);
+                    }
                 },
+
                 select: function(info) {
                     let nome = prompt("Nome evento (Vuoto per 'KIT'):");
                     if (nome !== null) {
+                        let title = nome.trim() === "" ? "KIT" : nome;
+                        
+                        // RICHIESTA SWITCH
+                        let isSw = confirm("Si tratta di un evento SWITCH?");
+                        let noteText = prompt("Note:");
+                        
+                        // Determinazione classe
+                        let cls = isSw ? "fc-event-switch" : (nome.trim() === "" ? "fc-event-kit" : "fc-event-custom");
+
                         calendar.addEvent({
-                            title: nome.trim() === "" ? "KIT" : nome,
+                            title: title,
                             start: info.startStr,
                             end: info.endStr,
                             allDay: true,
-                            extendedProps: { note: prompt("Note:") || "" },
-                            className: nome.trim() === "" ? "fc-event-kit" : "fc-event-custom"
+                            extendedProps: { 
+                                note: noteText || "",
+                                isSwitch: isSw 
+                            },
+                            className: cls
                         });
+                        syncToFirebase();
                     }
                     calendar.unselect();
                 },
+
                 eventClick: function(info) {
                     if (info.event.classNames.includes('fc-event-holiday')) return;
 
+                    const isCurrentlySwitch = info.event.extendedProps.isSwitch;
+                    
                     const scelta = confirm(
                         "EVENTO: " + info.event.title + "\n" +
+                        "SWITCH: " + (isCurrentlySwitch ? "SÌ" : "NO") + "\n" +
                         "NOTE: " + (info.event.extendedProps.note || "nessuna") + "\n\n" +
-                        "ELIMINARE EVENTO? (OK per eliminare, ANNULLA per modificare note)"
+                        "Vuoi ELIMINARE l'evento? (OK: Elimina, ANNULLA: Modifica)"
                     );
 
                     if (scelta) {
                         if (confirm("Confermi eliminazione definitiva?")) {
                             info.event.remove();
+                            syncToFirebase();
                         }
                     } else {
+                        // Modifica stato SWITCH
+                        if(confirm("Vuoi cambiare lo stato dello SWITCH?")) {
+                            const nuovoStato = !isCurrentlySwitch;
+                            info.event.setExtendedProp('isSwitch', nuovoStato);
+                            
+                            // Aggiorna classe
+                            let nuovaCls = nuovoStato ? "fc-event-switch" : (info.event.title === "KIT" ? "fc-event-kit" : "fc-event-custom");
+                            info.event.setProp('classNames', [nuovaCls]);
+                        }
+
                         const n = prompt("Nuova nota:", info.event.extendedProps.note || "");
                         if (n !== null) {
                             info.event.setExtendedProp('note', n);
-                            syncToFirebase();
-                            calendar.render();
                         }
+                        
+                        syncToFirebase();
+                        calendar.render();
                     }
                 },
+
                 eventAdd: syncToFirebase,
                 eventChange: syncToFirebase,
                 eventRemove: syncToFirebase
@@ -185,12 +220,16 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
 
             calendar.render();
 
-            // Sincronizzazione con Firebase
+            // Ascoltatore Cloud
             eventsRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 calendar.removeAllEvents();
                 calendar.addEventSource(holidays2026);
-                if (data) calendar.addEventSource(Object.values(data));
+                if (data) {
+                    // Trasforma l'oggetto in array se necessario
+                    const eventsArray = Array.isArray(data) ? data : Object.values(data);
+                    calendar.addEventSource(eventsArray);
+                }
                 setStatus("Sincronizzato ✔️", "sync-ok");
             });
         });
@@ -204,7 +243,7 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
                     start: e.startStr,
                     allDay: e.allDay,
                     extendedProps: e.extendedProps || {},
-                    className: e.classNames.join(' ')
+                    className: e.classNames.join(' ').replace('event-has-notes', '').trim()
                 }));
             eventsRef.set(toSave);
         }
@@ -217,10 +256,7 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
                 try {
                     const imported = JSON.parse(e.target.result);
                     if (confirm(`Importare ${imported.length} eventi nel Cloud?`)) {
-                        eventsRef.once('value', (snap) => {
-                            const current = snap.val() ? Object.values(snap.val()) : [];
-                            eventsRef.set(current.concat(imported));
-                        });
+                        eventsRef.set(imported);
                     }
                 } catch (err) { alert("Errore file JSON."); }
             };
@@ -229,12 +265,15 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
 
         function setStatus(txt, cls) {
             const s = document.getElementById('sync-status');
-            s.innerText = txt; s.className = "sync-indicator " + cls;
+            if(s) { s.innerText = txt; s.className = "sync-indicator " + cls; }
         }
 
         function toggleToolbar() {
             const t = document.getElementById('toolbar');
-            t.style.display = (t.style.display === "flex") ? "none" : "flex";
+            const arrow = document.getElementById('arrow');
+            const isVisible = (t.style.display === "flex");
+            t.style.display = isVisible ? "none" : "flex";
+            arrow.innerText = isVisible ? "▼" : "▲";
         }
 
         function changeZoom(v) {
@@ -249,11 +288,12 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
             calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).sort((a,b) => new Date(a.start) - new Date(b.start)).forEach(ev => {
                 const tr = document.createElement('tr');
                 const d = new Date(ev.start).toLocaleDateString('it-IT');
-                tr.innerHTML = `<td>${d}</td><td><strong>${ev.title}</strong> - ${ev.extendedProps.note || ''}</td>`;
+                const isSw = ev.extendedProps.isSwitch ? " [SWITCH]" : "";
+                tr.innerHTML = `<td>${d}</td><td><strong>${ev.title}${isSw}</strong> - ${ev.extendedProps.note || ''}</td>`;
                 tbody.appendChild(tr);
             });
             html2canvas(document.getElementById('export-table-container')).then(canvas => {
-                const a = document.createElement('a'); a.download = 'riepilogo.png'; a.href = canvas.toDataURL(); a.click();
+                const a = document.createElement('a'); a.download = 'riepilogo_logistica.png'; a.href = canvas.toDataURL(); a.click();
             });
         }
 
@@ -263,17 +303,10 @@ apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
             }));
             const html = document.documentElement.outerHTML.replace("events: holidays2026,", `events: ${JSON.stringify(events)},`);
             const blob = new Blob([html], { type: 'text/html' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'situazione.html'; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'situazione_statica.html'; a.click();
         }
 
-        function clearFirebase() { if(confirm("Svuotare Cloud?")) eventsRef.set([]); }
+        function clearFirebase() { if(confirm("ATTENZIONE: Svuotare tutto il Cloud?")) eventsRef.set([]); }
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
