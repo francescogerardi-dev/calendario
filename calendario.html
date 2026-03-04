@@ -17,7 +17,7 @@
             --primary: #007bff;
             --kit: #2c3e50;
             --custom: #8e44ad;
-            --switch: #e67e22; /* Arancione per lo SWITCH */
+            --switch-border: #ff0000; /* Rosso acceso per il bordo SWITCH */
             --holiday: #dfdfdf;
             --bg: #f8f9fa;
             --note-highlight: #ffcc00;
@@ -32,18 +32,40 @@
         #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); min-height: 600px; }
         #calendar-zoom-wrapper { transform-origin: top center; transition: transform 0.2s ease; }
 
-        /* Stili Eventi */
+        /* Stili Eventi Base */
         .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; font-size: 0.85em !important; border-radius: 4px !important; cursor: pointer; }
         .fc-event-kit { background-color: var(--kit) !important; color: white !important; }
         .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
-        
-        /* NUOVO STILE SWITCH */
-        .fc-event-switch { background-color: var(--switch) !important; color: white !important; font-weight: bold !important; border: 2px solid #d35400 !important; }
-        
         .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; border: 1px solid #bbb !important; }
+
+        /* NUOVA LOGICA BORDO SWITCH */
+        .event-is-switch { 
+            border: 3px solid var(--switch-border) !important; 
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.4) !important;
+            position: relative;
+        }
+
+        /* Indicatore testuale SWITCH (piccola etichetta interna) */
+        .event-is-switch::before {
+            content: "SW";
+            position: absolute;
+            right: 2px;
+            top: 1px;
+            font-size: 0.65em;
+            background: red;
+            color: white;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
         
-        /* Note: il bordo giallo ora ha priorità */
-        .event-has-notes { border-color: var(--note-highlight) !important; box-shadow: 0 0 6px rgba(255, 204, 0, 0.7) !important; }
+        /* Note: bordo giallo se presente */
+        .event-has-notes { border-color: var(--note-highlight) !important; }
+        
+        /* Se sono entrambi: bordo rosso ma ombra gialla */
+        .event-is-switch.event-has-notes {
+            border-color: var(--switch-border) !important;
+            box-shadow: 0 0 8px var(--note-highlight) !important;
+        }
 
         /* Indicatori e Bottoni */
         .sync-indicator { font-size: 0.85em; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
@@ -140,6 +162,10 @@
                 editable: true,
                 
                 eventDidMount: (info) => {
+                    // Gestione SWITCH (Bordo Rosso)
+                    if (info.event.extendedProps.isSwitch) {
+                        info.el.classList.add('event-is-switch');
+                    }
                     // Gestione Note (Bordo Giallo)
                     if (info.event.extendedProps.note && info.event.extendedProps.note.trim() !== "") {
                         info.el.classList.add('event-has-notes');
@@ -151,13 +177,10 @@
                     let nome = prompt("Nome evento (Vuoto per 'KIT'):");
                     if (nome !== null) {
                         let title = nome.trim() === "" ? "KIT" : nome;
+                        let isSw = confirm("ATTIVARE lo SWITCH per questo evento?");
+                        let noteText = prompt("Inserisci eventuali Note:");
                         
-                        // RICHIESTA SWITCH
-                        let isSw = confirm("Si tratta di un evento SWITCH?");
-                        let noteText = prompt("Note:");
-                        
-                        // Determinazione classe
-                        let cls = isSw ? "fc-event-switch" : (nome.trim() === "" ? "fc-event-kit" : "fc-event-custom");
+                        let cls = (nome.trim() === "" ? "fc-event-kit" : "fc-event-custom");
 
                         calendar.addEvent({
                             title: title,
@@ -178,11 +201,11 @@
                 eventClick: function(info) {
                     if (info.event.classNames.includes('fc-event-holiday')) return;
 
-                    const isCurrentlySwitch = info.event.extendedProps.isSwitch;
+                    const isSw = info.event.extendedProps.isSwitch;
                     
                     const scelta = confirm(
                         "EVENTO: " + info.event.title + "\n" +
-                        "SWITCH: " + (isCurrentlySwitch ? "SÌ" : "NO") + "\n" +
+                        "SWITCH: " + (isSw ? "ATTIVO (Bordo Rosso)" : "disattivato") + "\n" +
                         "NOTE: " + (info.event.extendedProps.note || "nessuna") + "\n\n" +
                         "Vuoi ELIMINARE l'evento? (OK: Elimina, ANNULLA: Modifica)"
                     );
@@ -193,17 +216,11 @@
                             syncToFirebase();
                         }
                     } else {
-                        // Modifica stato SWITCH
                         if(confirm("Vuoi cambiare lo stato dello SWITCH?")) {
-                            const nuovoStato = !isCurrentlySwitch;
-                            info.event.setExtendedProp('isSwitch', nuovoStato);
-                            
-                            // Aggiorna classe
-                            let nuovaCls = nuovoStato ? "fc-event-switch" : (info.event.title === "KIT" ? "fc-event-kit" : "fc-event-custom");
-                            info.event.setProp('classNames', [nuovaCls]);
+                            info.event.setExtendedProp('isSwitch', !isSw);
                         }
 
-                        const n = prompt("Nuova nota:", info.event.extendedProps.note || "");
+                        const n = prompt("Aggiorna nota:", info.event.extendedProps.note || "");
                         if (n !== null) {
                             info.event.setExtendedProp('note', n);
                         }
@@ -220,16 +237,11 @@
 
             calendar.render();
 
-            // Ascoltatore Cloud
             eventsRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 calendar.removeAllEvents();
                 calendar.addEventSource(holidays2026);
-                if (data) {
-                    // Trasforma l'oggetto in array se necessario
-                    const eventsArray = Array.isArray(data) ? data : Object.values(data);
-                    calendar.addEventSource(eventsArray);
-                }
+                if (data) calendar.addEventSource(Object.values(data));
                 setStatus("Sincronizzato ✔️", "sync-ok");
             });
         });
@@ -243,24 +255,9 @@
                     start: e.startStr,
                     allDay: e.allDay,
                     extendedProps: e.extendedProps || {},
-                    className: e.classNames.join(' ').replace('event-has-notes', '').trim()
+                    className: e.classNames.join(' ').replace('event-has-notes', '').replace('event-is-switch', '').trim()
                 }));
             eventsRef.set(toSave);
-        }
-
-        function importJSON(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    if (confirm(`Importare ${imported.length} eventi nel Cloud?`)) {
-                        eventsRef.set(imported);
-                    }
-                } catch (err) { alert("Errore file JSON."); }
-            };
-            reader.readAsText(file);
         }
 
         function setStatus(txt, cls) {
@@ -288,12 +285,12 @@
             calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).sort((a,b) => new Date(a.start) - new Date(b.start)).forEach(ev => {
                 const tr = document.createElement('tr');
                 const d = new Date(ev.start).toLocaleDateString('it-IT');
-                const isSw = ev.extendedProps.isSwitch ? " [SWITCH]" : "";
-                tr.innerHTML = `<td>${d}</td><td><strong>${ev.title}${isSw}</strong> - ${ev.extendedProps.note || ''}</td>`;
+                const sw = ev.extendedProps.isSwitch ? " [SWITCH]" : "";
+                tr.innerHTML = `<td>${d}</td><td><strong>${ev.title}${sw}</strong> - ${ev.extendedProps.note || ''}</td>`;
                 tbody.appendChild(tr);
             });
             html2canvas(document.getElementById('export-table-container')).then(canvas => {
-                const a = document.createElement('a'); a.download = 'riepilogo_logistica.png'; a.href = canvas.toDataURL(); a.click();
+                const a = document.createElement('a'); a.download = 'riepilogo.png'; a.href = canvas.toDataURL(); a.click();
             });
         }
 
@@ -303,7 +300,7 @@
             }));
             const html = document.documentElement.outerHTML.replace("events: holidays2026,", `events: ${JSON.stringify(events)},`);
             const blob = new Blob([html], { type: 'text/html' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'situazione_statica.html'; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'situazione.html'; a.click();
         }
 
         function clearFirebase() { if(confirm("ATTENZIONE: Svuotare tutto il Cloud?")) eventsRef.set([]); }
