@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione Logistica KIT & SWITCH 2026</title>
+    <title>Gestione Logistica KIT & SWITCH 2.1</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -17,9 +17,8 @@
             --primary: #007bff;
             --kit: #2c3e50;
             --custom: #8e44ad;
-            --switch-border: #ff0000;
-            --bg-verde: #eaffea; /* Verde tenue */
-            --bg-blu: #ebf5ff;   /* Blu tenue */
+            --bg-verde: #eaffea; /* Verde molto tenue */
+            --bg-blu: #ebf5ff;   /* Blu molto tenue */
             --holiday: #dfdfdf;
             --note-highlight: #ffcc00;
         }
@@ -33,7 +32,7 @@
         #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); min-height: 600px; }
         #calendar-zoom-wrapper { transform-origin: top center; transition: transform 0.2s ease; }
 
-        /* Colorazione Celle Verde/Blu */
+        /* Background Celle Dinamici */
         .bg-cella-verde { background-color: var(--bg-verde) !important; }
         .bg-cella-blu { background-color: var(--bg-blu) !important; }
 
@@ -43,12 +42,15 @@
         .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
         .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; border: 1px solid #bbb !important; }
         
-        /* Bordo Switch e Note */
-        .event-is-switch { border: 3px solid var(--switch-border) !important; box-shadow: 0 0 8px rgba(255, 0, 0, 0.4) !important; }
-        .event-has-notes { border-color: var(--note-highlight) !important; }
-        .event-is-switch.event-has-notes { border-color: var(--switch-border) !important; box-shadow: 0 0 8px var(--note-highlight) !important; }
+        /* Stile SWITCH (Senza Rosso) */
+        .event-is-switch { 
+            border: 3px solid rgba(0,0,0,0.2) !important; 
+            box-shadow: inset 0 0 4px rgba(255,255,255,0.4) !important;
+            font-weight: bold !important;
+        }
 
-        /* Sync status bar */
+        .event-has-notes { border-color: var(--note-highlight) !important; border-width: 2px !important; }
+
         .sync-indicator { font-size: 0.85em; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
         .sync-ok { background: #d4edda; color: #155724; }
         .sync-wait { background: #fff3cd; color: #856404; }
@@ -95,7 +97,7 @@
     </div>
 
     <script>
-        // --- 1. CONFIGURAZIONE FIREBASE ---
+        // CONFIGURAZIONE FIREBASE
         const firebaseConfig = {
             apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
             authDomain: "calendario-kit.firebaseapp.com",
@@ -124,19 +126,28 @@
             { title: "Natale", start: "2026-12-25", className: "fc-event-holiday" }
         ];
 
-        // --- 2. LOGICA COLORAZIONE CELLE DINAMICA ---
+        // LOGICA CALCOLO COLORE CELLE (Verde/Blu)
         function calcolaColorePerData(dataTarget) {
-            const dataInizioLogica = new Date(2026, 2, 4); // 4 Marzo 2026
-            if (dataTarget < dataInizioLogica) return null;
+            const dataInizioLogica = new Date(2026, 2, 4); // 4 Marzo
+            dataInizioLogica.setHours(0, 0, 0, 0);
+            
+            const target = new Date(dataTarget);
+            target.setHours(0, 0, 0, 0);
 
-            // Prende tutti gli eventi switch ordinati per data
+            if (target < dataInizioLogica) return null;
+
+            // Filtra tutti gli eventi SWITCH caricati nel calendario e ordinali
             const switchEvents = calendar.getEvents()
                 .filter(e => e.extendedProps.isSwitch === true)
                 .sort((a, b) => new Date(a.start) - new Date(b.start));
 
             let statoVerde = true; 
             for (let ev of switchEvents) {
-                if (new Date(ev.start) <= dataTarget) {
+                const dataEv = new Date(ev.start);
+                dataEv.setHours(0, 0, 0, 0);
+                
+                // Se lo switch è accaduto oggi o nel passato rispetto alla cella, inverte il colore
+                if (dataEv <= target) {
                     statoVerde = !statoVerde;
                 }
             }
@@ -152,19 +163,19 @@
                 selectable: true,
                 editable: true,
                 
-                // Colorazione celle
+                // Ricoloramento delle celle basato sulla data
                 dayCellDidMount: function(info) {
-                    const colore = calcolaColorePerData(info.date);
-                    if (colore === 'verde') info.el.classList.add('bg-cella-verde');
-                    if (colore === 'blu') info.el.classList.add('bg-cella-blu');
+                    const col = calcolaColorePerData(info.date);
+                    if (col === 'verde') info.el.classList.add('bg-cella-verde');
+                    if (col === 'blu') info.el.classList.add('bg-cella-blu');
                 },
 
                 eventDidMount: (info) => {
-                    if (info.event.extendedProps.isSwitch) info.el.classList.add('event-is-switch');
-                    if (info.event.extendedProps.note && info.event.extendedProps.note.trim() !== "") {
-                        info.el.classList.add('event-has-notes');
-                        info.el.setAttribute('title', "Note: " + info.event.extendedProps.note);
+                    if (info.event.extendedProps.isSwitch) {
+                        info.el.classList.add('event-is-switch');
+                        info.el.innerHTML += " <small style='float:right; opacity:0.6;'>SW</small>";
                     }
+                    if (info.event.extendedProps.note) info.el.classList.add('event-has-notes');
                 },
 
                 select: function(info) {
@@ -187,27 +198,22 @@
 
                 eventClick: function(info) {
                     if (info.event.classNames.includes('fc-event-holiday')) return;
-
-                    const isSw = info.event.extendedProps.isSwitch;
+                    const isCurrentlySw = info.event.extendedProps.isSwitch;
                     
-                    // Menu gestione a cascata
                     if (confirm("ELIMINARE l'evento '" + info.event.title + "'?")) {
                         info.event.remove();
                         syncToFirebase();
                         return;
                     }
 
-                    if (confirm("L'evento è " + (isSw ? "uno SWITCH" : "NORMALE") + ". Vuoi CAMBIARE lo stato dello SWITCH?")) {
-                        info.event.setExtendedProp('isSwitch', !isSw);
+                    if (confirm("L'evento è " + (isCurrentlySw ? "uno SWITCH" : "NORMALE") + ". Vuoi CAMBIARE lo stato?")) {
+                        info.event.setExtendedProp('isSwitch', !isCurrentlySw);
                     }
 
                     const n = prompt("Modifica note:", info.event.extendedProps.note || "");
-                    if (n !== null) {
-                        info.event.setExtendedProp('note', n);
-                    }
+                    if (n !== null) info.event.setExtendedProp('note', n);
                     
                     syncToFirebase();
-                    calendar.render(); 
                 },
 
                 eventDrop: syncToFirebase,
@@ -216,7 +222,7 @@
 
             calendar.render();
 
-            // Sincronizzazione Realtime Database
+            // Listener Database Cloud
             eventsRef.on('value', (snapshot) => {
                 const data = snapshot.val();
                 calendar.removeAllEvents();
@@ -226,11 +232,11 @@
                     calendar.addEventSource(arr);
                 }
                 setStatus("Sincronizzato ✔️", "sync-ok");
-                calendar.render(); // Necessario per ricalcolare i colori delle celle
+                // Forza il ricalcolo dei colori delle celle dopo il caricamento dati
+                calendar.render(); 
             });
         });
 
-        // --- 3. FUNZIONI DI SERVIZIO ---
         function syncToFirebase() {
             setStatus("Salvataggio... ⏳", "sync-wait");
             const toSave = calendar.getEvents()
@@ -242,7 +248,10 @@
                     extendedProps: e.extendedProps || {},
                     className: e.classNames.join(' ').replace('event-has-notes', '').replace('event-is-switch', '').trim()
                 }));
-            eventsRef.set(toSave);
+            
+            eventsRef.set(toSave).then(() => {
+                calendar.render(); // Ricarica la grafica immediata
+            });
         }
 
         function setStatus(txt, cls) {
@@ -252,10 +261,10 @@
 
         function toggleToolbar() {
             const t = document.getElementById('toolbar');
-            const arrow = document.getElementById('arrow');
-            const isVisible = t.style.display === "flex";
-            t.style.display = isVisible ? "none" : "flex";
-            arrow.innerText = isVisible ? "▼" : "▲";
+            const a = document.getElementById('arrow');
+            const vis = t.style.display === "flex";
+            t.style.display = vis ? "none" : "flex";
+            a.innerText = vis ? "▼" : "▲";
         }
 
         function changeZoom(v) {
@@ -269,12 +278,12 @@
             tbody.innerHTML = "";
             calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).sort((a,b) => new Date(a.start) - new Date(b.start)).forEach(ev => {
                 const tr = document.createElement('tr');
-                const swLabel = ev.extendedProps.isSwitch ? " [SWITCH]" : "";
-                tr.innerHTML = `<td>${new Date(ev.start).toLocaleDateString('it-IT')}</td><td><strong>${ev.title}${swLabel}</strong> - ${ev.extendedProps.note || ''}</td>`;
+                const sw = ev.extendedProps.isSwitch ? " [SWITCH]" : "";
+                tr.innerHTML = `<td>${new Date(ev.start).toLocaleDateString()}</td><td><strong>${ev.title}${sw}</strong> - ${ev.extendedProps.note || ''}</td>`;
                 tbody.appendChild(tr);
             });
             html2canvas(document.getElementById('export-table-container')).then(c => {
-                const a = document.createElement('a'); a.download = 'riepilogo_2026.png'; a.href = c.toDataURL(); a.click();
+                const a = document.createElement('a'); a.download = 'riepilogo.png'; a.href = c.toDataURL(); a.click();
             });
         }
 
@@ -284,10 +293,10 @@
             }));
             const html = document.documentElement.outerHTML.replace("events: holidays2026,", `events: ${JSON.stringify(events)},`);
             const blob = new Blob([html], { type: 'text/html' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'calendario_logistica_fisso.html'; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'logistica_export.html'; a.click();
         }
 
-        function clearFirebase() { if(confirm("ATTENZIONE: Svuotare tutti i dati dal Cloud?")) eventsRef.set([]); }
+        function clearFirebase() { if(confirm("CANCELLARE TUTTI I DATI DAL CLOUD?")) eventsRef.set([]); }
     </script>
 </body>
 </html>
