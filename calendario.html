@@ -1,40 +1,293 @@
-eventClick: function(info) {
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Logistica KIT & SWITCH 2026</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check-compat.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #007bff;
+            --kit: #2c3e50;
+            --custom: #8e44ad;
+            --switch-border: #ff0000;
+            --bg-verde: #eaffea; /* Verde tenue */
+            --bg-blu: #ebf5ff;   /* Blu tenue */
+            --holiday: #dfdfdf;
+            --note-highlight: #ffcc00;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background-color: #f8f9fa; }
+        
+        #toolbar-container { margin-bottom: 10px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .controls-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 1px solid #eee; }
+        #toolbar { padding: 15px; display: none; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+        #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); min-height: 600px; }
+        #calendar-zoom-wrapper { transform-origin: top center; transition: transform 0.2s ease; }
+
+        /* Colorazione Celle Verde/Blu */
+        .bg-cella-verde { background-color: var(--bg-verde) !important; }
+        .bg-cella-blu { background-color: var(--bg-blu) !important; }
+
+        /* Stili Eventi */
+        .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; font-size: 0.85em !important; border-radius: 4px !important; cursor: pointer; }
+        .fc-event-kit { background-color: var(--kit) !important; color: white !important; }
+        .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
+        .fc-event-holiday { background-color: var(--holiday) !important; color: #333 !important; font-weight: bold; pointer-events: none; border: 1px solid #bbb !important; }
+        
+        /* Bordo Switch e Note */
+        .event-is-switch { border: 3px solid var(--switch-border) !important; box-shadow: 0 0 8px rgba(255, 0, 0, 0.4) !important; }
+        .event-has-notes { border-color: var(--note-highlight) !important; }
+        .event-is-switch.event-has-notes { border-color: var(--switch-border) !important; box-shadow: 0 0 8px var(--note-highlight) !important; }
+
+        /* Sync status bar */
+        .sync-indicator { font-size: 0.85em; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
+        .sync-ok { background: #d4edda; color: #155724; }
+        .sync-wait { background: #fff3cd; color: #856404; }
+
+        button { padding: 8px 16px; cursor: pointer; border-radius: 6px; border: 1px solid #ddd; background: white; font-weight: 600; }
+        .btn-img { background: #6f42c1; color: white; border: none; }
+        
+        #export-table-container { position: absolute; left: -9999px; top: 0; background: white; padding: 20px; width: 800px; }
+        .export-table { width: 100%; border-collapse: collapse; }
+        .export-table th, .export-table td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <div id="toolbar-container">
+        <div class="controls-row">
+            <button onclick="toggleToolbar()">⚙️ Gestione <span id="arrow">▼</span></button>
+            <div id="sync-status" class="sync-indicator sync-wait">Connessione Cloud...</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="changeZoom(-0.1)">-</button>
+                <span id="zoom-val">100%</span>
+                <button onclick="changeZoom(0.1)">+</button>
+            </div>
+        </div>
+        <div id="toolbar">
+            <button class="btn-img" onclick="exportTableAsImage()">📸 Esporta PNG</button>
+            <button onclick="exportToStaticHTML()">📄 Esporta HTML Statica</button>
+            <button onclick="clearFirebase()" style="color:red">🗑️ Svuota Tutto Cloud</button>
+        </div>
+    </div>
+
+    <div id="calendar-outer-wrapper">
+        <div id="calendar-zoom-wrapper">
+            <div id="calendar"></div>
+        </div>
+    </div>
+
+    <div id="export-table-container">
+        <h2 style="text-align: center;">Riepilogo Logistica 2026</h2>
+        <table class="export-table">
+            <thead><tr><th>Data</th><th>Evento</th></tr></thead>
+            <tbody id="export-table-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // --- 1. CONFIGURAZIONE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCyKOYvV18rJ2E6wedKB4NSvu-gP_hMDPI",
+            authDomain: "calendario-kit.firebaseapp.com",
+            databaseURL: "https://calendario-kit-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "calendario-kit",
+            appId: "1:912995766124:web:2ee26f77adbe6da28bad49"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        firebase.appCheck().activate('6LeOnW4sAAAAADtdy1-GTZPaYzPldNMAshqmm_0e', true);
+        
+        const db = firebase.database();
+        const eventsRef = db.ref('pico_events_2026');
+
+        let calendar;
+        let currentZoom = 1.0;
+
+        const holidays2026 = [
+            { title: "Capodanno", start: "2026-01-01", className: "fc-event-holiday" },
+            { title: "Epifania", start: "2026-01-06", className: "fc-event-holiday" },
+            { title: "Pasqua", start: "2026-04-05", className: "fc-event-holiday" },
+            { title: "Pasquetta", start: "2026-04-06", className: "fc-event-holiday" },
+            { title: "Liberazione", start: "2026-04-25", className: "fc-event-holiday" },
+            { title: "Festa Lavoro", start: "2026-05-01", className: "fc-event-holiday" },
+            { title: "Ferragosto", start: "2026-08-15", className: "fc-event-holiday" },
+            { title: "Natale", start: "2026-12-25", className: "fc-event-holiday" }
+        ];
+
+        // --- 2. LOGICA COLORAZIONE CELLE DINAMICA ---
+        function calcolaColorePerData(dataTarget) {
+            const dataInizioLogica = new Date(2026, 2, 4); // 4 Marzo 2026
+            if (dataTarget < dataInizioLogica) return null;
+
+            // Prende tutti gli eventi switch ordinati per data
+            const switchEvents = calendar.getEvents()
+                .filter(e => e.extendedProps.isSwitch === true)
+                .sort((a, b) => new Date(a.start) - new Date(b.start));
+
+            let statoVerde = true; 
+            for (let ev of switchEvents) {
+                if (new Date(ev.start) <= dataTarget) {
+                    statoVerde = !statoVerde;
+                }
+            }
+            return statoVerde ? 'verde' : 'blu';
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+                initialView: 'dayGridMonth',
+                locale: 'it',
+                firstDay: 1,
+                height: 'auto',
+                selectable: true,
+                editable: true,
+                
+                // Colorazione celle
+                dayCellDidMount: function(info) {
+                    const colore = calcolaColorePerData(info.date);
+                    if (colore === 'verde') info.el.classList.add('bg-cella-verde');
+                    if (colore === 'blu') info.el.classList.add('bg-cella-blu');
+                },
+
+                eventDidMount: (info) => {
+                    if (info.event.extendedProps.isSwitch) info.el.classList.add('event-is-switch');
+                    if (info.event.extendedProps.note && info.event.extendedProps.note.trim() !== "") {
+                        info.el.classList.add('event-has-notes');
+                        info.el.setAttribute('title', "Note: " + info.event.extendedProps.note);
+                    }
+                },
+
+                select: function(info) {
+                    let nome = prompt("Nome evento (Vuoto per 'KIT'):");
+                    if (nome !== null) {
+                        let isSw = confirm("ATTIVARE lo SWITCH per questo evento?");
+                        let noteText = prompt("Note:");
+                        
+                        calendar.addEvent({
+                            title: nome.trim() === "" ? "KIT" : nome,
+                            start: info.startStr,
+                            allDay: true,
+                            extendedProps: { note: noteText || "", isSwitch: isSw },
+                            className: nome.trim() === "" ? "fc-event-kit" : "fc-event-custom"
+                        });
+                        syncToFirebase();
+                    }
+                    calendar.unselect();
+                },
+
+                eventClick: function(info) {
                     if (info.event.classNames.includes('fc-event-holiday')) return;
 
                     const isSw = info.event.extendedProps.isSwitch;
                     
-                    // 1. ELIMINAZIONE
+                    // Menu gestione a cascata
                     if (confirm("ELIMINARE l'evento '" + info.event.title + "'?")) {
                         info.event.remove();
                         syncToFirebase();
                         return;
                     }
 
-                    // 2. MODIFICA SWITCH
-                    if (confirm("L'evento è attualmente " + (isSw ? "uno SWITCH (Bordo Rosso)" : "NORMALE") + ".\nVuoi CAMBIARE questa impostazione?")) {
-                        const nuovoStato = !isSw;
-                        info.event.setExtendedProp('isSwitch', nuovoStato);
-                        
-                        // Aggiorniamo la classe CSS per il bordo rosso
-                        if (nuovoStato) {
-                            info.el.classList.add('event-is-switch');
-                        } else {
-                            info.el.classList.remove('event-is-switch');
-                        }
+                    if (confirm("L'evento è " + (isSw ? "uno SWITCH" : "NORMALE") + ". Vuoi CAMBIARE lo stato dello SWITCH?")) {
+                        info.event.setExtendedProp('isSwitch', !isSw);
                     }
 
-                    // 3. MODIFICA NOTE
-                    const nuovaNota = prompt("Modifica le note:", info.event.extendedProps.note || "");
-                    if (nuovaNota !== null) {
-                        info.event.setExtendedProp('note', nuovaNota);
-                        if (nuovaNota.trim() !== "") {
-                            info.el.classList.add('event-has-notes');
-                        } else {
-                            info.el.classList.remove('event-has-notes');
-                        }
+                    const n = prompt("Modifica note:", info.event.extendedProps.note || "");
+                    if (n !== null) {
+                        info.event.setExtendedProp('note', n);
                     }
-
-                    // Salvataggio e rinfresco grafico immediato
+                    
                     syncToFirebase();
                     calendar.render(); 
                 },
+
+                eventDrop: syncToFirebase,
+                eventResize: syncToFirebase
+            });
+
+            calendar.render();
+
+            // Sincronizzazione Realtime Database
+            eventsRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                calendar.removeAllEvents();
+                calendar.addEventSource(holidays2026);
+                if (data) {
+                    const arr = Array.isArray(data) ? data : Object.values(data);
+                    calendar.addEventSource(arr);
+                }
+                setStatus("Sincronizzato ✔️", "sync-ok");
+                calendar.render(); // Necessario per ricalcolare i colori delle celle
+            });
+        });
+
+        // --- 3. FUNZIONI DI SERVIZIO ---
+        function syncToFirebase() {
+            setStatus("Salvataggio... ⏳", "sync-wait");
+            const toSave = calendar.getEvents()
+                .filter(e => !e.classNames.includes('fc-event-holiday'))
+                .map(e => ({
+                    title: e.title,
+                    start: e.startStr,
+                    allDay: e.allDay,
+                    extendedProps: e.extendedProps || {},
+                    className: e.classNames.join(' ').replace('event-has-notes', '').replace('event-is-switch', '').trim()
+                }));
+            eventsRef.set(toSave);
+        }
+
+        function setStatus(txt, cls) {
+            const s = document.getElementById('sync-status');
+            s.innerText = txt; s.className = "sync-indicator " + cls;
+        }
+
+        function toggleToolbar() {
+            const t = document.getElementById('toolbar');
+            const arrow = document.getElementById('arrow');
+            const isVisible = t.style.display === "flex";
+            t.style.display = isVisible ? "none" : "flex";
+            arrow.innerText = isVisible ? "▼" : "▲";
+        }
+
+        function changeZoom(v) {
+            currentZoom = Math.min(Math.max(0.4, currentZoom + v), 1.0);
+            document.getElementById('calendar-zoom-wrapper').style.transform = `scale(${currentZoom})`;
+            document.getElementById('zoom-val').innerText = Math.round(currentZoom * 100) + "%";
+        }
+
+        function exportTableAsImage() {
+            const tbody = document.getElementById('export-table-body');
+            tbody.innerHTML = "";
+            calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).sort((a,b) => new Date(a.start) - new Date(b.start)).forEach(ev => {
+                const tr = document.createElement('tr');
+                const swLabel = ev.extendedProps.isSwitch ? " [SWITCH]" : "";
+                tr.innerHTML = `<td>${new Date(ev.start).toLocaleDateString('it-IT')}</td><td><strong>${ev.title}${swLabel}</strong> - ${ev.extendedProps.note || ''}</td>`;
+                tbody.appendChild(tr);
+            });
+            html2canvas(document.getElementById('export-table-container')).then(c => {
+                const a = document.createElement('a'); a.download = 'riepilogo_2026.png'; a.href = c.toDataURL(); a.click();
+            });
+        }
+
+        function exportToStaticHTML() {
+            const events = calendar.getEvents().filter(e => !e.classNames.includes('fc-event-holiday')).map(e => ({
+                title: e.title, start: e.startStr, allDay: e.allDay, extendedProps: e.extendedProps, className: e.classNames.join(' ')
+            }));
+            const html = document.documentElement.outerHTML.replace("events: holidays2026,", `events: ${JSON.stringify(events)},`);
+            const blob = new Blob([html], { type: 'text/html' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'calendario_logistica_fisso.html'; a.click();
+        }
+
+        function clearFirebase() { if(confirm("ATTENZIONE: Svuotare tutti i dati dal Cloud?")) eventsRef.set([]); }
+    </script>
+</body>
+</html>
