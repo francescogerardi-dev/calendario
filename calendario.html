@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione Logistica KIT & SWITCH 2.2 Fix</title>
+    <title>Gestione Logistica KIT & SWITCH 2.3 - Cloud</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -17,20 +17,30 @@
             --bg-verde: #eaffea; 
             --bg-blu: #ebf5ff;   
             --note-highlight: #ffcc00;
+            --today-border: #007bff; /* Colore per evidenziare oggi */
         }
 
         body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background-color: #f8f9fa; }
         #calendar-outer-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
 
-        /* Background Celle */
+        /* Colorazione Dinamica Celle */
         .bg-cella-verde { background-color: var(--bg-verde) !important; }
         .bg-cella-blu { background-color: var(--bg-blu) !important; }
 
+        /* --- EVIDENZIA OGGI --- */
+        .fc-day-today {
+            border: 3px solid var(--today-border) !important;
+            box-shadow: inset 0 0 10px rgba(0, 123, 255, 0.2) !important;
+            position: relative;
+            z-index: 5; /* Assicura che il bordo sia sopra i vicini */
+        }
+
+        /* Stili Eventi */
         .fc-event { border: 2px solid transparent !important; padding: 2px 4px !important; border-radius: 4px !important; cursor: pointer; }
         .fc-event-kit { background-color: var(--kit) !important; color: white !important; }
         .fc-event-custom { background-color: var(--custom) !important; color: white !important; }
         
-        /* SWITCH sobrio */
+        /* Stile SWITCH */
         .event-is-switch { 
             border: 3px solid rgba(0,0,0,0.3) !important; 
             box-shadow: inset 0 0 4px rgba(255,255,255,0.4) !important;
@@ -66,12 +76,10 @@
 
         let calendar;
 
-        // --- FUNZIONE CORE: RICALCOLA E APPLICA COLORI ---
         function ricalcolaColoriCelle() {
             const dataInizioLogica = new Date(2026, 2, 4);
             dataInizioLogica.setHours(0,0,0,0);
 
-            // 1. Trova tutti gli eventi SWITCH e mettili in ordine cronologico
             const switchDates = calendar.getEvents()
                 .filter(e => e.extendedProps.isSwitch === true)
                 .map(e => {
@@ -81,7 +89,6 @@
                 })
                 .sort((a, b) => a - b);
 
-            // 2. Seleziona tutte le celle del calendario nel DOM
             const celle = document.querySelectorAll('.fc-daygrid-day');
 
             celle.forEach(cella => {
@@ -91,12 +98,11 @@
                 const dataCella = new Date(dataCellaAttr);
                 dataCella.setHours(0,0,0,0);
 
-                // Rimuovi colori precedenti
+                // Reset colori precedenti
                 cella.classList.remove('bg-cella-verde', 'bg-cella-blu');
 
                 if (dataCella >= dataInizioLogica) {
                     let statoVerde = true;
-                    // Conta quanti switch sono passati fino a questa cella
                     for (let swTime of switchDates) {
                         if (swTime <= dataCella.getTime()) {
                             statoVerde = !statoVerde;
@@ -116,7 +122,7 @@
                 selectable: true,
                 editable: true,
                 
-                // Ricalcola i colori ogni volta che la vista cambia (es. cambio mese)
+                // Ricalcolo colori su ogni cambio vista o ricarica
                 datesSet: ricalcolaColoriCelle,
 
                 eventDidMount: (info) => {
@@ -164,8 +170,6 @@
                 if (data) calendar.addEventSource(Object.values(data));
                 document.getElementById('sync-status').innerText = "Sincronizzato ✔️";
                 document.getElementById('sync-status').className = "sync-indicator sync-ok";
-                
-                // Attendiamo un attimo che il DOM si aggiorni e poi coloriamo
                 setTimeout(ricalcolaColoriCelle, 100);
             });
         });
